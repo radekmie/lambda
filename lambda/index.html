@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Lambda</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      body,
+      input {
+        font-family: monospace;
+        font-size: 1.5rem;
+      }
+
+      body,
+      html,
+      svg {
+        height: 100vh;
+        width: 100vw;
+      }
+
+      input {
+        bottom: 1em;
+        left: 1em;
+        position: fixed;
+        right: 1em;
+        width: calc(100vw - 2em);
+      }
+
+      svg {
+        display: block;
+      }
+
+      .node rect {
+        fill: #fff;
+        stroke: #333;
+      }
+
+      .edgePath path {
+        fill: #333;
+        stroke: #333;
+        stroke-width: 1.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <input type="text">
+    <script src="index.js"></script>
+  </body>
+</html>
