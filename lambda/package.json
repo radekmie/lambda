@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "parcel build index.html --detailed-report --no-autoinstall --no-content-hash --no-source-maps --out-dir ../docs --public-url https://radekmie.github.io/lambda/",
-    "start": "parcel watch index.html"
+    "start": "parcel serve index.html"
   },
   "dependencies": {
     "dagre-d3": "0.6.3",
