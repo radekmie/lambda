@@ -3,11 +3,10 @@
   "private": true,
   "scripts": {
     "build": "parcel build index.html --detailed-report --no-autoinstall --no-content-hash --no-source-maps --out-dir ../docs --public-url https://radekmie.github.io/lambda/",
-    "start": "parcel serve index.html"
+    "start": "parcel serve index.html --out-dir .cache/docs"
   },
   "dependencies": {
-    "dagre-d3": "0.6.3",
-    "graphlib-dot": "0.6.2"
+    "dagre-d3": "0.6.3"
   },
   "devDependencies": {
     "parcel-bundler": "1.12.3"

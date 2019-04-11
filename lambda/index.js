@@ -1,4 +1,4 @@
-const _wrapIf = (condition, string) => condition ? `(${string})` : string;
+const _wrapIf = (condition, string, a = '(', b = ')') => condition ? `${a}${string}${b}` : string;
 const _found = (tokens, vars) => Var(vars.lastIndexOf(tokens.shift()));
 const _build = (tokens, vars, app) => !/^[a-z\(]$/.test(tokens[0]) ? app : _build(tokens, vars, App(app, tokens[0] === '(' ? _parse(tokens, vars, true) : _found(tokens, vars)));
 const _parse = (tokens, vars, bound) => {
@@ -37,9 +37,9 @@ const isVar = term => term[0] === 'Var';
 const fold = (Var, Lam, App) => (term, ...args) => ({App, Lam, Var}[term[0]])(term, ...args);
 
 const copy = fold(
-  M => Var(M[1]),
-  M => Lam(M[1], copy(M[2])),
-  M => App(copy(M[1]), copy(M[2]))
+  (M, d = 0) => Var(M[1] + Math.max(0, d)),
+  (M, d = 0) => Lam(M[1] + Math.max(0, d), copy(M[2], d)),
+  (M, d = 0) => App(copy(M[1], d), copy(M[2], d))
 );
 
 const toName = x => (x + 10).toString(36);
@@ -49,7 +49,26 @@ const toAST = fold(
   M => `App(${toAST(M[1])}, ${toAST(M[2])})`
 );
 
-const fromString = source => _parse(source.replace(/\\/g, 'λ').split(''), []);
+const fromString = source => _parse(
+  source
+    .replace(/0/g, '(λf.λx.x)')
+    .replace(/1/g, '(λf.λx.fx)')
+    .replace(/2/g, '(λf.λx.f(fx))')
+    .replace(/3/g, '(λf.λx.f(f(fx)))')
+    .replace(/4/g, '(λf.λx.f(f(f(fx))))')
+    .replace(/5/g, '(λf.λx.f(f(f(f(fx)))))')
+    .replace(/6/g, '(λf.λx.f(f(f(f(f(fx))))))')
+    .replace(/7/g, '(λf.λx.f(f(f(f(f(f(fx)))))))')
+    .replace(/8/g, '(λf.λx.f(f(f(f(f(f(f(fx))))))))')
+    .replace(/9/g, '(λf.λx.f(f(f(f(f(f(f(f(fx)))))))))')
+    .replace(/I/g, '(λx.x)')
+    .replace(/K/g, '(λx.λy.x)')
+    .replace(/S/g, '(λx.λy.λz.xz(yz))')
+    .replace(/\\/g, 'λ')
+    .split(''),
+  []
+);
+
 const toString = fold(
   M => toName(M[1]),
   M => `λ${toName(M[1])}.${toString(M[2])}`,
@@ -63,9 +82,9 @@ const redexes = fold(
 );
 
 const replace = fold(
-  (M, x, N) => x === M[1] ? copy(N) : x < M[1] ? Var(M[1] - 1) : M,
-  (M, x, N) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replace(M[2], x, N)),
-  (M, x, N) => App(replace(M[1], x, N), replace(M[2], x, N))
+  (M, x, N, d = 0) => x === M[1] ? copy(N, d) : x < M[1] ? Var(M[1] - 1) : M,
+  (M, x, N, d = 0) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replace(M[2], x, N, d + 1)),
+  (M, x, N, d = 0) => App(replace(M[1], x, N, d), replace(M[2], x, N, d))
 );
 
 const phi = fold(
@@ -77,15 +96,15 @@ const phi = fold(
 const beta = fold(
   (M, N) => M,
   (M, N) => Lam(M[1], beta(M[2], N)),
-  (M, N) => M === N ? replace(M[1][2], M[1][1], M[2]) : App(beta(M[1], N), beta(M[2], N))
+  (M, N) => M === N ? replace(M[1][2], M[1][1], M[2], -M[1][1]) : App(beta(M[1], N), beta(M[2], N))
 );
 
-const betaGraph = (term, size = 25) => {
+const betaGraph = (term) => {
   const nodes = [term];
   const found = new Set();
   const graph = new Map();
 
-  while (nodes.length && size-- > 0) {
+  while (nodes.length && found.size < 25) {
     const term = nodes.shift();
     found.add(toString(term));
     graph.set(term, redexes(term).map(redex => [beta(term, redex), redex]));
@@ -102,6 +121,12 @@ if (typeof window !== 'undefined') {
   const D3 = require('d3');
   const dagreD3 = require('dagre-d3');
 
+  const toStringColor = fold(
+    (M, Ns) => toName(M[1]),
+    (M, Ns) => `λ${toName(M[1])}.${toStringColor(M[2], Ns)}`,
+    (M, Ns) => _wrapIf(Ns.includes(M), _wrapIf(isLam(M[1]), toStringColor(M[1], Ns)) + _wrapIf(!isVar(M[2]), toStringColor(M[2], Ns)), `<tspan class="redex redex-${Ns.indexOf(M)}">`, '</tspan>')
+  );
+
   const render = dagreD3.render();
   const zoom = D3.zoom().on('zoom', () => g.attr('transform', D3.event.transform));
   const body = D3.select('body');
@@ -110,39 +135,66 @@ if (typeof window !== 'undefined') {
   const g = svg.append('g');
   svg.call(zoom);
 
+  render.arrows().normal = function normal(parent, id, edge, type) {
+    const marker = parent.append('marker')
+      .attr('id', id)
+      .attr('viewBox', '0 0 10 10')
+      .attr('refX', 5)
+      .attr('refY', 5)
+      .attr('markerUnits', 'strokeWidth')
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 4)
+      .attr('orient', 'auto');
+
+    const path = marker.append('path')
+      .attr('d', 'M 0 0 L 10 5 L 0 10 z');
+
+    if (edge[type + 'Class'])
+      path.attr('class', edge[type + 'Class']);
+
+    dagreD3.util.applyStyle(path, edge[type + 'Style']);
+  };
+
   input.on('input', update);
-  update.call({value: '(λx.xx)(λx.x(λy.y)xx)'});
+  update.call({value: '(λy.y(λx.y(λx.y(λx.y))))(λy.y)'});
+  window.addEventListener('resize', () => update.call({value: input.node().value}));
 
   function update() {
     try {
       input.attr('value', this.value);
 
-      const graph = new dagreD3.graphlib.Graph().setGraph({});
+      const graph = new dagreD3.graphlib.Graph({multigraph: true}).setGraph({});
       for (const [termA, pairs] of betaGraph(fromString(this.value))) {
         const textA = toString(termA);
-        graph.setNode(textA, {label: textA});
+        const label = toStringColor(termA, pairs.map(pair => pair[1]));
+        graph.setNode(textA, {label, labelType: 'html'});
 
-        for (const [termB, redex] of pairs) {
-          const textB = toString(termB);
-          graph.setNode(textB, {label: textB});
-          graph.setEdge(textA, textB, {label: ''});
+        for (const pair of pairs) {
+          const textB = toString(pair[0]);
+          const textC = toString(pair[1]);
+          if (!graph.node(textB))
+            graph.setNode(textB, {label: textB});
+          graph.setEdge(
+            textA,
+            textB,
+            {class: `redex redex-${pairs.indexOf(pair)}`, label: ''},
+            textA + textB + textC
+          );
         }
       }
 
+      svg.call(zoom.transform, D3.zoomIdentity);
+
       render(g, graph);
 
-      const scale = 0.8 * Math.min(
-        window.innerWidth / graph.graph().width,
-        window.innerHeight / graph.graph().height
-      );
+      const {height: h, width: w} = graph.graph();
+      const {innerHeight: H, innerWidth: W} = window;
+      const scale = 0.75 * Math.min(W / w, H / h);
 
       svg.call(
         zoom.transform,
         D3.zoomIdentity
-          .translate(
-            (window.innerWidth - graph.graph().width * scale) / 2,
-            (window.innerHeight - graph.graph().height * scale) / 2
-          )
+          .translate((W - w * scale) / 2, (H - h * scale) / 2)
           .scale(scale)
       );
     } catch (error) {
