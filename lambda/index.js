@@ -1,6 +1,9 @@
 const _wrapIf = (condition, string, a = '(', b = ')') => condition ? `${a}${string}${b}` : string;
-const _found = (tokens, vars) => Var(vars.lastIndexOf(tokens.shift()));
 const _build = (tokens, vars, app) => !/^[a-z\(]$/.test(tokens[0]) ? app : _build(tokens, vars, App(app, tokens[0] === '(' ? _parse(tokens, vars, true) : _found(tokens, vars)));
+const _found = (tokens, vars) => {
+  const name = tokens.shift();
+  return Var(vars.includes(name) ? vars.lastIndexOf(name) : name);
+};
 const _parse = (tokens, vars, bound) => {
   switch (tokens[0]) {
     case undefined:
@@ -36,13 +39,14 @@ const isVar = term => term[0] === 'Var';
 
 const fold = (Var, Lam, App) => (term, ...args) => ({App, Lam, Var}[term[0]])(term, ...args);
 
-const copy = fold(
-  (M, d = 0) => Var(M[1] + Math.max(0, d)),
-  (M, d = 0) => Lam(M[1] + Math.max(0, d), copy(M[2], d)),
-  (M, d = 0) => App(copy(M[1], d), copy(M[2], d))
+const copy = term => lift(term, 0);
+const lift = fold(
+  (M, d) => Var(typeof M[1] === 'string' ? M[1] : M[1] + Math.max(0, d)),
+  (M, d) => Lam(M[1] + Math.max(0, d), lift(M[2], d)),
+  (M, d) => App(lift(M[1], d), lift(M[2], d))
 );
 
-const toName = x => (x + 10).toString(36);
+const toName = x => typeof x === 'string' ? x : (x + 10).toString(36);
 const toAST = fold(
   M => `Var(${M[1]})`,
   M => `Lam(${M[1]}, ${toAST(M[2])})`,
@@ -64,6 +68,7 @@ const fromString = source => _parse(
     .replace(/I/g, '(λx.x)')
     .replace(/K/g, '(λx.λy.x)')
     .replace(/S/g, '(λx.λy.λz.xz(yz))')
+    .replace(/Y/g, '(λf.(λx.f(xx))(λx.f(xx)))')
     .replace(/\\/g, 'λ')
     .split(''),
   []
@@ -82,7 +87,7 @@ const redexes = fold(
 );
 
 const replace = fold(
-  (M, x, N, d = 0) => x === M[1] ? copy(N, d) : x < M[1] ? Var(M[1] - 1) : M,
+  (M, x, N, d = 0) => x === M[1] ? lift(N, d) : x < M[1] ? Var(M[1] - 1) : M,
   (M, x, N, d = 0) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replace(M[2], x, N, d + 1)),
   (M, x, N, d = 0) => App(replace(M[1], x, N, d), replace(M[2], x, N, d))
 );
