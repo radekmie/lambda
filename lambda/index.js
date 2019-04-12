@@ -29,15 +29,27 @@ const _parse = (tokens, vars, bound) => {
   }
 };
 
-const App = (m, n) => ['App', m, n];
-const Lam = (x, n) => ['Lam', x, n];
-const Var = x => ['Var', x];
+const $App = 0;
+const $Lam = 1;
+const $Var = 2;
 
-const isApp = term => term[0] === 'App';
-const isLam = term => term[0] === 'Lam';
-const isVar = term => term[0] === 'Var';
+const App = (m, n) => [$App, m, n];
+const Lam = (x, n) => [$Lam, x, n];
+const Var = x => [$Var, x];
 
-const fold = (Var, Lam, App) => (term, ...args) => ({App, Lam, Var}[term[0]])(term, ...args);
+const isApp = term => term[0] === $App;
+const isLam = term => term[0] === $Lam;
+const isVar = term => term[0] === $Var;
+
+const fold = (Var, Lam, App) => {
+  return (term, ...args) => {
+    switch (term[0]) {
+      case $App: return App(term, ...args);
+      case $Lam: return Lam(term, ...args);
+      case $Var: return Var(term, ...args);
+    }
+  };
+};
 
 const copy = term => lift(term, 0);
 const lift = fold(
@@ -86,10 +98,11 @@ const redexes = fold(
   M => redexes(M[2]).concat(redexes(M[1]), isLam(M[1]) ? [M] : [])
 );
 
-const replace = fold(
-  (M, x, N, d = 0) => x === M[1] ? lift(N, d) : x < M[1] ? Var(M[1] - 1) : M,
-  (M, x, N, d = 0) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replace(M[2], x, N, d + 1)),
-  (M, x, N, d = 0) => App(replace(M[1], x, N, d), replace(M[2], x, N, d))
+const replace = term => replaceAt(term, 0);
+const replaceAt = fold(
+  (M, x, N, d) => x === M[1] ? lift(N, d) : x < M[1] ? Var(M[1] - 1) : M,
+  (M, x, N, d) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replaceAt(M[2], x, N, d + 1)),
+  (M, x, N, d) => App(replaceAt(M[1], x, N, d), replaceAt(M[2], x, N, d))
 );
 
 const phi = fold(
@@ -101,21 +114,24 @@ const phi = fold(
 const beta = fold(
   (M, N) => M,
   (M, N) => Lam(M[1], beta(M[2], N)),
-  (M, N) => M === N ? replace(M[1][2], M[1][1], M[2], -M[1][1]) : App(beta(M[1], N), beta(M[2], N))
+  (M, N) => M === N ? replaceAt(M[1][2], M[1][1], M[2], -M[1][1]) : App(beta(M[1], N), beta(M[2], N))
 );
 
 const betaGraph = (term) => {
   const nodes = [term];
-  const found = new Set();
+  const found = new Set([toString(term)]);
   const graph = new Map();
 
-  while (nodes.length && found.size < 25) {
+  while (nodes.length && found.size < 100) {
     const term = nodes.shift();
-    found.add(toString(term));
+
     graph.set(term, redexes(term).map(redex => [beta(term, redex), redex]));
     graph.get(term).forEach(pair => {
-      if (!found.has(toString(pair[0])))
+      const tag = toString(pair[0]);
+      if (!found.has(tag)) {
+        found.add(tag);
         nodes.push(pair[0]);
+      }
     });
   }
 
