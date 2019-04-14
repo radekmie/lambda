@@ -1,35 +1,55 @@
-const _wrapIf = (condition, string, a = '(', b = ')') => condition ? `${a}${string}${b}` : string;
-const _build = (tokens, vars, app) => !/^[a-z\(]$/.test(tokens[0]) ? app : _build(tokens, vars, App(app, tokens[0] === '(' ? _parse(tokens, vars, true) : _found(tokens, vars)));
-const _found = (tokens, vars) => {
-  const name = tokens.shift();
-  const bind = vars.lastIndexOf(name);
-  return bind === -1 ? Val(name) : Var(bind);
-};
+const parser = {
+  parse(tokens, vars, isBound) {
+    if (tokens[0] === '(')
+      return this.parsePar(tokens, vars, isBound);
+    if (tokens[0] === 'λ')
+      return this.parseLam(tokens, vars);
+    return this.parseApp(tokens, vars, this.parseVar(tokens, vars));
+  },
 
-const _parse = (tokens, vars, bound) => {
-  switch (tokens[0]) {
-    case undefined:
+  parseApp(tokens, vars, app) {
+    if (tokens[0] === '(')
+      return this.parseApp(tokens, vars, App(app, this.parsePar(tokens, vars, true)));
+    if (this.parseVarRegex.test(tokens[0]))
+      return this.parseApp(tokens, vars, App(app, this.parseVar(tokens, vars)));
+    return app;
+  },
+
+  parseEnd(tokens, vars, app) {
+    if (tokens[0] !== ')')
+      return this.parseEnd(tokens, vars, App(app, this.parse(tokens, vars, false)));
+    return app;
+  },
+
+  parseLam(tokens, vars) {
+    if (tokens.shift() !== 'λ')
       throw new Error('ParsingError');
+    const name = tokens.shift();
+    if (tokens.shift() !== '.')
+      throw new Error('ParsingError');
+    return Lam(vars.length, this.parse(tokens, vars.concat(name), false));
+  },
 
-    case '(':
-      tokens.shift(); // (
-      let app = _parse(tokens, vars);
-      while (tokens[0] !== ')')
-        app = App(app, _parse(tokens, vars));
-      tokens.shift(); // )
-      return bound ? app : _build(tokens, vars, app);
+  parsePar(tokens, vars, isBound) {
+    if (tokens.shift() !== '(')
+      throw new Error('ParsingError');
+    const app = this.parseEnd(tokens, vars, this.parse(tokens, vars, false));
+    if (tokens.shift() !== ')')
+      throw new Error('ParsingError');
+    return isBound ? app : this.parseApp(tokens, vars, app);
+  },
 
-    case 'λ':
-      tokens.shift(); // λ
-      const name = tokens.shift();
-      const bind = vars.length;
-      tokens.shift(); // .
-      return Lam(bind, _parse(tokens, vars.concat(name)));
-
-    default:
-      return _build(tokens, vars, _found(tokens, vars));
+  parseVarRegex: /^[a-z]$/,
+  parseVar(tokens, vars) {
+    if (!this.parseVarRegex.test(tokens[0]))
+      throw new Error('ParsingError');
+    const name = tokens.shift();
+    const bind = vars.lastIndexOf(name);
+    return bind === -1 ? Val(name) : Var(bind);
   }
 };
+
+const _wrapIf = (condition, string, a = '(', b = ')') => condition ? `${a}${string}${b}` : string;
 
 const $App = 0;
 const $Lam = 1;
@@ -57,12 +77,13 @@ const fold = (Var, Val, Lam, App) => {
   };
 };
 
+const alpha = (M, N) => equal(M, lift(N, 0, compare(M, N)));
 const equal = (M, N) => compare(M, N) === 0;
 const compare = fold(
-  (M, N) => !isVar(N) ? (M[0] - N[0]) * Infinity : M[1] - N[1],
-  (M, N) => !isVal(N) ? (M[0] - N[0]) * Infinity : M[1].localeCompare(N[1]),
-  (M, N) => !isLam(N) ? (M[0] - N[0]) * Infinity : M[1] - N[1] || compare(M[2], N[2]),
-  (M, N) => !isApp(N) ? (M[0] - N[0]) * Infinity : compare(M[1], N[1]) || compare(M[2], N[2])
+  (M, N) => !isVar(N) ? (N[0] - M[0]) * Infinity : M[1] - N[1],
+  (M, N) => !isVal(N) ? (N[0] - M[0]) * Infinity : M[1].localeCompare(N[1]),
+  (M, N) => !isLam(N) ? (N[0] - M[0]) * Infinity : M[1] - N[1] || compare(M[2], N[2]),
+  (M, N) => !isApp(N) ? (N[0] - M[0]) * Infinity : compare(M[1], N[1]) || compare(M[2], N[2])
 );
 
 const copy = M => lift(M, 0, 0);
@@ -82,32 +103,50 @@ const toAST = fold(
 );
 
 const knownTerms = {
-  0: '(λf.λx.x)',
-  1: '(λf.λx.fx)',
-  2: '(λf.λx.f(fx))',
-  3: '(λf.λx.f(f(fx)))',
-  4: '(λf.λx.f(f(f(fx))))',
-  5: '(λf.λx.f(f(f(f(fx)))))',
-  6: '(λf.λx.f(f(f(f(f(fx))))))',
-  7: '(λf.λx.f(f(f(f(f(f(fx)))))))',
-  8: '(λf.λx.f(f(f(f(f(f(f(fx))))))))',
-  9: '(λf.λx.f(f(f(f(f(f(f(f(fx)))))))))',
-  I: '(λx.x)',
-  K: '(λx.λy.x)',
-  S: '(λx.λy.λz.xz(yz))',
-  Y: '(λf.(λx.f(xx))(λx.f(xx)))'
+  add: (name, text) => {
+    const term = fromString(text);
+    console.assert(isLam(term));
+    knownTerms.names.push(name);
+    knownTerms.name2term.set(name, term);
+    knownTerms.name2text.set(name, text);
+    knownTerms.terms.push(term);
+    knownTerms.term2name.set(term, name);
+    knownTerms.regex = new RegExp(knownTerms.names.join('|'), 'g');
+  },
+  getName: term => knownTerms.term2name.get(term),
+  getTerm: name => knownTerms.name2term.get(name),
+  getText: name => knownTerms.name2text.get(name),
+  regex: /$^/,
+  names: [],
+  terms: [],
+  name2term: new Map(),
+  name2text: new Map(),
+  term2name: new Map()
 };
 
-const knownTermsRegex = new RegExp(Object.keys(knownTerms).join('|'), 'g');
-const knownTermsFound = M => knownTerms[M];
-
-const fromString = source => _parse(
+const fromString = source => parser.parse(
   source
     .replace(/\\/g, 'λ')
-    .replace(knownTermsRegex, knownTermsFound)
+    .replace(knownTerms.regex, knownTerms.getText)
     .split(''),
-  []
+  [],
+  false
 );
+
+knownTerms.add('0', '(λf.λx.x)');
+knownTerms.add('1', '(λf.λx.fx)');
+knownTerms.add('2', '(λf.λx.f(fx))');
+knownTerms.add('3', '(λf.λx.f(f(fx)))');
+knownTerms.add('4', '(λf.λx.f(f(f(fx))))');
+knownTerms.add('5', '(λf.λx.f(f(f(f(fx)))))');
+knownTerms.add('6', '(λf.λx.f(f(f(f(f(fx))))))');
+knownTerms.add('7', '(λf.λx.f(f(f(f(f(f(fx)))))))');
+knownTerms.add('8', '(λf.λx.f(f(f(f(f(f(f(fx))))))))');
+knownTerms.add('9', '(λf.λx.f(f(f(f(f(f(f(f(fx)))))))))');
+knownTerms.add('I', '(λx.x)');
+knownTerms.add('K', '(λx.λy.x)');
+knownTerms.add('S', '(λx.λy.λz.xz(yz))');
+knownTerms.add('Y', '(λf.(λx.f(xx))(λx.f(xx)))');
 
 const toString = fold(
   M => toName(M[1]),
