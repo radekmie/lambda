@@ -57,6 +57,14 @@ const fold = (Var, Val, Lam, App) => {
   };
 };
 
+const equal = (M, N) => compare(M, N) === 0;
+const compare = fold(
+  (M, N) => !isVar(N) ? (M[0] - N[0]) * Infinity : M[1] - N[1],
+  (M, N) => !isVal(N) ? (M[0] - N[0]) * Infinity : M[1].localeCompare(N[1]),
+  (M, N) => !isLam(N) ? (M[0] - N[0]) * Infinity : M[1] - N[1] || compare(M[2], N[2]),
+  (M, N) => !isApp(N) ? (M[0] - N[0]) * Infinity : compare(M[1], N[1]) || compare(M[2], N[2])
+);
+
 const copy = M => lift(M, 0, 0);
 const lift = fold(
   (M, d, n) => Var(M[1] < d ? M[1] : M[1] + n),
@@ -73,23 +81,30 @@ const toAST = fold(
   M => `App(${toAST(M[1])}, ${toAST(M[2])})`
 );
 
+const knownTerms = {
+  0: '(λf.λx.x)',
+  1: '(λf.λx.fx)',
+  2: '(λf.λx.f(fx))',
+  3: '(λf.λx.f(f(fx)))',
+  4: '(λf.λx.f(f(f(fx))))',
+  5: '(λf.λx.f(f(f(f(fx)))))',
+  6: '(λf.λx.f(f(f(f(f(fx))))))',
+  7: '(λf.λx.f(f(f(f(f(f(fx)))))))',
+  8: '(λf.λx.f(f(f(f(f(f(f(fx))))))))',
+  9: '(λf.λx.f(f(f(f(f(f(f(f(fx)))))))))',
+  I: '(λx.x)',
+  K: '(λx.λy.x)',
+  S: '(λx.λy.λz.xz(yz))',
+  Y: '(λf.(λx.f(xx))(λx.f(xx)))'
+};
+
+const knownTermsRegex = new RegExp(Object.keys(knownTerms).join('|'), 'g');
+const knownTermsFound = M => knownTerms[M];
+
 const fromString = source => _parse(
   source
-    .replace(/0/g, '(λf.λx.x)')
-    .replace(/1/g, '(λf.λx.fx)')
-    .replace(/2/g, '(λf.λx.f(fx))')
-    .replace(/3/g, '(λf.λx.f(f(fx)))')
-    .replace(/4/g, '(λf.λx.f(f(f(fx))))')
-    .replace(/5/g, '(λf.λx.f(f(f(f(fx)))))')
-    .replace(/6/g, '(λf.λx.f(f(f(f(f(fx))))))')
-    .replace(/7/g, '(λf.λx.f(f(f(f(f(f(fx)))))))')
-    .replace(/8/g, '(λf.λx.f(f(f(f(f(f(f(fx))))))))')
-    .replace(/9/g, '(λf.λx.f(f(f(f(f(f(f(f(fx)))))))))')
-    .replace(/I/g, '(λx.x)')
-    .replace(/K/g, '(λx.λy.x)')
-    .replace(/S/g, '(λx.λy.λz.xz(yz))')
-    .replace(/Y/g, '(λf.(λx.f(xx))(λx.f(xx)))')
     .replace(/\\/g, 'λ')
+    .replace(knownTermsRegex, knownTermsFound)
     .split(''),
   []
 );
@@ -128,10 +143,7 @@ const betaAt = fold(
   (M, N, d) => M,
   (M, N, d) => M,
   (M, N, d) => Lam(M[1], betaAt(M[2], N, d + 1)),
-  (M, N, d) => {
-    M === N && console.log(`(${toString(M[1][2])})[${toName(M[1][1])} := ${toString(M[2])}] d=${d} = ${toString(replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]))}`);
-    return M === N ? replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]) : App(betaAt(M[1], N, d), betaAt(M[2], N, d));
-  }
+  (M, N, d) => M === N ? replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]) : App(betaAt(M[1], N, d), betaAt(M[2], N, d))
 );
 
 const betaGraph = term => {
