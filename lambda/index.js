@@ -2,8 +2,10 @@ const _wrapIf = (condition, string, a = '(', b = ')') => condition ? `${a}${stri
 const _build = (tokens, vars, app) => !/^[a-z\(]$/.test(tokens[0]) ? app : _build(tokens, vars, App(app, tokens[0] === '(' ? _parse(tokens, vars, true) : _found(tokens, vars)));
 const _found = (tokens, vars) => {
   const name = tokens.shift();
-  return Var(vars.includes(name) ? vars.lastIndexOf(name) : name);
+  const bind = vars.lastIndexOf(name);
+  return bind === -1 ? Val(name) : Var(bind);
 };
+
 const _parse = (tokens, vars, bound) => {
   switch (tokens[0]) {
     case undefined:
@@ -31,36 +33,42 @@ const _parse = (tokens, vars, bound) => {
 
 const $App = 0;
 const $Lam = 1;
-const $Var = 2;
+const $Val = 2;
+const $Var = 3;
 
 const App = (m, n) => [$App, m, n];
 const Lam = (x, n) => [$Lam, x, n];
+const Val = x => [$Val, x];
 const Var = x => [$Var, x];
 
 const isApp = term => term[0] === $App;
 const isLam = term => term[0] === $Lam;
+const isVal = term => term[0] === $Val;
 const isVar = term => term[0] === $Var;
 
-const fold = (Var, Lam, App) => {
+const fold = (Var, Val, Lam, App) => {
   return (term, ...args) => {
     switch (term[0]) {
       case $App: return App(term, ...args);
       case $Lam: return Lam(term, ...args);
+      case $Val: return Val(term, ...args);
       case $Var: return Var(term, ...args);
     }
   };
 };
 
-const copy = term => lift(term, 0);
+const copy = M => lift(M, 0, 0);
 const lift = fold(
-  (M, d) => Var(typeof M[1] === 'string' ? M[1] : M[1] + Math.max(0, d)),
-  (M, d) => Lam(M[1] + Math.max(0, d), lift(M[2], d)),
-  (M, d) => App(lift(M[1], d), lift(M[2], d))
+  (M, d, n) => Var(M[1] < d ? M[1] : M[1] + n),
+  (M, d, n) => Val(M[1]),
+  (M, d, n) => Lam(M[1] + n, lift(M[2], d, n)),
+  (M, d, n) => App(lift(M[1], d, n), lift(M[2], d, n))
 );
 
-const toName = x => typeof x === 'string' ? x : (x + 10).toString(36);
+const toName = x => (x + 10).toString(36);
 const toAST = fold(
   M => `Var(${M[1]})`,
+  M => `Val(${M[1]})`,
   M => `Lam(${M[1]}, ${toAST(M[2])})`,
   M => `App(${toAST(M[1])}, ${toAST(M[2])})`
 );
@@ -88,36 +96,45 @@ const fromString = source => _parse(
 
 const toString = fold(
   M => toName(M[1]),
+  M => M[1],
   M => `λ${toName(M[1])}.${toString(M[2])}`,
-  M => _wrapIf(isLam(M[1]), toString(M[1])) + _wrapIf(!isVar(M[2]), toString(M[2]))
+  M => _wrapIf(isLam(M[1]), toString(M[1])) + _wrapIf(!isVal(M[2]) && !isVar(M[2]), toString(M[2]))
 );
 
 const redexes = fold(
+  M => [],
   M => [],
   M => redexes(M[2]),
   M => redexes(M[2]).concat(redexes(M[1]), isLam(M[1]) ? [M] : [])
 );
 
-const replace = term => replaceAt(term, 0);
+const replace = M => replaceAt(M, 0);
 const replaceAt = fold(
-  (M, x, N, d) => x === M[1] ? lift(N, d) : x < M[1] ? Var(M[1] - 1) : M,
+  (M, x, N, d) => x === M[1] ? lift(N, x, d) : x < M[1] ? Var(M[1] - 1) : M,
+  (M, x, N, d) => M,
   (M, x, N, d) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replaceAt(M[2], x, N, d + 1)),
   (M, x, N, d) => App(replaceAt(M[1], x, N, d), replaceAt(M[2], x, N, d))
 );
 
 const phi = fold(
   M => M,
+  M => M,
   M => Lam(M[1], phi(M[2])),
   M => isLam(M[1]) ? replace(phi(M[1][2]), M[1][1], phi(M[2])) : App(phi(M[1]), phi(M[2]))
 );
 
-const beta = fold(
-  (M, N) => M,
-  (M, N) => Lam(M[1], beta(M[2], N)),
-  (M, N) => M === N ? replaceAt(M[1][2], M[1][1], M[2], -M[1][1]) : App(beta(M[1], N), beta(M[2], N))
+const beta = (M, N) => betaAt(M, N, 0);
+const betaAt = fold(
+  (M, N, d) => M,
+  (M, N, d) => M,
+  (M, N, d) => Lam(M[1], betaAt(M[2], N, d + 1)),
+  (M, N, d) => {
+    M === N && console.log(`(${toString(M[1][2])})[${toName(M[1][1])} := ${toString(M[2])}] d=${d} = ${toString(replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]))}`);
+    return M === N ? replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]) : App(betaAt(M[1], N, d), betaAt(M[2], N, d));
+  }
 );
 
-const betaGraph = (term) => {
+const betaGraph = term => {
   const nodes = [term];
   const found = new Set([toString(term)]);
   const graph = new Map();
@@ -144,8 +161,9 @@ if (typeof window !== 'undefined') {
 
   const toStringColor = fold(
     (M, Ns) => toName(M[1]),
+    (M, Ns) => M[1],
     (M, Ns) => `λ${toName(M[1])}.${toStringColor(M[2], Ns)}`,
-    (M, Ns) => _wrapIf(Ns.includes(M), _wrapIf(isLam(M[1]), toStringColor(M[1], Ns)) + _wrapIf(!isVar(M[2]), toStringColor(M[2], Ns)), `<tspan class="redex redex-${Ns.indexOf(M)}">`, '</tspan>')
+    (M, Ns) => _wrapIf(Ns.includes(M), _wrapIf(isLam(M[1]), toStringColor(M[1], Ns)) + _wrapIf(!isVal(M[2]) && !isVar(M[2]), toStringColor(M[2], Ns)), `<tspan class="redex redex-${Ns.indexOf(M)}">`, '</tspan>')
   );
 
   const render = dagreD3.render();
