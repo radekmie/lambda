@@ -46,6 +46,27 @@ export const copy = M => lift(M, 0, 0);
 
 export const equal = (M, N) => compare(M, N) === 0;
 
+export const generate = function * (n, free = [], vars = []) {
+  if (n < 1)
+    return;
+
+  if (n === 1) {
+    for (const x of free)
+      yield Val(x);
+    for (const x of vars)
+      yield Var(x);
+    return;
+  }
+
+  for (const M of generate(n - 1, free, vars.concat(vars.length)))
+    yield Lam(vars.length, M);
+
+  for (let index = 1; index < n; ++index)
+    for (const M of generate(index, free, vars))
+      for (const N of generate(n - index, free, vars))
+        yield App(M, N);
+};
+
 export const lift = fold(
   (M, d, n) => Var(M[1] < d ? M[1] : M[1] + n),
   (M, d, n) => Val(M[1]),
