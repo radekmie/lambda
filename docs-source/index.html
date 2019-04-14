@@ -15,7 +15,7 @@
       body,
       input {
         font-family: monospace;
-        font-size: 1.5rem;
+        font-size: 1.25rem;
       }
 
       body,
@@ -26,9 +26,26 @@
       }
 
       input {
+        position: fixed;
+      }
+
+      input[type="checkbox"] {
+        height: 1em;
+        right: 1em;
+        top: 1em;
+        width: 1em;
+      }
+
+      input[type="checkbox"]::before {
+        content: "Use names";
+        position: absolute;
+        right: 1.25em;
+        white-space: nowrap;
+      }
+
+      input[type="text"] {
         bottom: 1em;
         left: 1em;
-        position: fixed;
         right: 1em;
         width: calc(100vw - 2em);
       }
@@ -94,8 +111,10 @@
       Try these:
       * (λx.xxx)(λx.xxx)
       * (λx.xx)(λx.xx)
+      * SIx
       * SKK
       * 5I
+      * 3K
     </pre>
     <script src="index.js"></script>
   </body>
