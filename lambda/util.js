@@ -11,29 +11,43 @@ export const betaAt = fold(
   (M, N, d) => M,
   (M, N, d) => M,
   (M, N, d) => Lam(M[1], betaAt(M[2], N, d + 1)),
-  (M, N, d) => M === N ? replaceAt(M[1][2], M[1][1], M[2], d-M[1][1]) : App(betaAt(M[1], N, d), betaAt(M[2], N, d))
+  (M, N, d) => M === N ? replaceAt(M[1][2], M[1][1], M[2], d - M[1][1]) : App(betaAt(M[1], N, d), betaAt(M[2], N, d))
 );
 
-export const betaGraph = term => {
-  const nodes = [term];
-  const found = new Set([toAST(term)]);
-  const graph = new Map();
+export const betaGraph = function * (M, limit = size(M) ** 2) {
+  const found = new Set([toAST(M)]);
+  const queue = [M];
 
-  while (nodes.length && found.size < 100) {
-    const term = nodes.shift();
+  while (queue.length && limit-- > 0) {
+    const term = queue.shift();
+    const pairs = betaRedexes(term).map(redex => {
+      const reduced = beta(term, redex);
+      const termTag = toAST(reduced);
 
-    graph.set(term, redexes(term).map(redex => [beta(term, redex), redex]));
-    graph.get(term).forEach(pair => {
-      const tag = toAST(pair[0]);
-      if (!found.has(tag)) {
-        found.add(tag);
-        nodes.push(pair[0]);
+      if (!found.has(termTag)) {
+        found.add(termTag);
+        queue.push(reduced);
       }
-    });
-  }
 
-  return graph;
+      return [reduced, redex];
+    });
+
+    yield [term, pairs];
+  }
 };
+
+export const betaNormal = (M, limit) => {
+  for (const [term, redexes] of betaGraph(M, limit))
+    if (redexes.length === 0)
+      return term;
+};
+
+export const betaRedexes = fold(
+  M => [],
+  M => [],
+  M => betaRedexes(M[2]),
+  M => betaRedexes(M[2]).concat(betaRedexes(M[1]), isLam(M[1]) ? [M] : [])
+);
 
 export const compare = fold(
   (M, N) => !isVar(N) ? (N[0] - M[0]) * Infinity : M[1] - N[1],
@@ -46,15 +60,25 @@ export const copy = M => lift(M, 0, 0);
 
 export const equal = (M, N) => compare(M, N) === 0;
 
-export const generate = function * (n, free = [], vars = []) {
-  if (n < 1)
-    return;
+export const free = fold(
+  M => [M],
+  M => [M],
+  M => free(M[2]).filter(N => !isVar(N) || N[1] !== M[1]),
+  M => free(M[1]).concat(free(M[2]))
+);
 
+export const fromChurch = fold(
+  (M, f, x, n) => M[1] === x ? +n : NaN,
+  (M, f, x, n) => NaN,
+  (M, f, x, n) => f === undefined ? fromChurch(M[2], M[1]) : x === undefined ? fromChurch(M[2], f, M[1], 0) : NaN,
+  (M, f, x, n) => f !== undefined && x !== undefined && isVar(M[1]) && M[1][1] === f ? fromChurch(M[2], f, x, n + 1) : NaN
+);
+
+export const generate = function * (n, free = [], vars = []) {
+  if (n < 1) return;
   if (n === 1) {
-    for (const x of free)
-      yield Val(x);
-    for (const x of vars)
-      yield Var(x);
+    for (const x of free) yield Val(x);
+    for (const x of vars) yield Var(x);
     return;
   }
 
@@ -64,7 +88,7 @@ export const generate = function * (n, free = [], vars = []) {
   for (let index = 1; index < n; ++index)
     for (const M of generate(index, free, vars))
       for (const N of generate(n - index, free, vars))
-        yield App(M, N);
+        yield App(copy(M), N);
 };
 
 export const lift = fold(
@@ -81,13 +105,6 @@ export const phi = fold(
   M => isLam(M[1]) ? replace(phi(M[1][2]), M[1][1], phi(M[2])) : App(phi(M[1]), phi(M[2]))
 );
 
-export const redexes = fold(
-  M => [],
-  M => [],
-  M => redexes(M[2]),
-  M => redexes(M[2]).concat(redexes(M[1]), isLam(M[1]) ? [M] : [])
-);
-
 export const replace = M => replaceAt(M, 0);
 
 export const replaceAt = fold(
@@ -95,6 +112,13 @@ export const replaceAt = fold(
   (M, x, N, d) => M,
   (M, x, N, d) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replaceAt(M[2], x, N, d + 1)),
   (M, x, N, d) => App(replaceAt(M[1], x, N, d), replaceAt(M[2], x, N, d))
+);
+
+export const size = fold(
+  M => 1,
+  M => 1,
+  M => 1 + size(M[2]),
+  M => size(M[1]) + size(M[2])
 );
 
 export const toAST = fold(

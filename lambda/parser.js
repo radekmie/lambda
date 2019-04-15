@@ -1,6 +1,12 @@
 import {App, Lam, Val, Var} from './core';
 
-export const fromString = string => parse(string.split(''), [], false);
+export const fromString = string => {
+  const tokens = string.split('');
+  const parsed = parse(tokens, [], false);
+  if (tokens.length)
+    throw new Error('ParsingError');
+  return parsed;
+};
 
 const parse = (tokens, vars, isBound) => {
   if (tokens[0] === '(')

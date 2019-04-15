@@ -34,28 +34,29 @@ update({string: '(λx.x(λy.x(λy.x(λy.x))))(λx.x)', useNames: true});
 
 // Renderer core.
 function update({string, useNames}) {
+  $rect.call(zoom.transform, D3.zoomIdentity);
+  $bool.attr('checked', useNames);
+  $text.attr('value', string);
+
+  let graph = new dagreD3.graphlib.Graph().setGraph({});
   try {
-    $rect.call(zoom.transform, D3.zoomIdentity);
-    $bool.attr('checked', useNames);
-    $text.attr('value', string);
-
-    const graph = fromInput({string, useNames});
-    render($root, graph);
-
-    const {height: h, width: w} = graph.graph();
-    const {innerHeight: H, innerWidth: W} = window;
-    const scale = 0.75 * Math.min(W / w, H / h);
-
-    $rect.call(
-      zoom.transform,
-      D3.zoomIdentity
-        .translate((W - w * scale) / 2, (H - h * scale) / 2)
-        .scale(scale)
-    );
+    graph = fromInput({string, useNames});
   } catch (error) {
-    render($root, new dagreD3.graphlib.Graph().setGraph({}));
-    console.error(error);
+    graph.setNode('error', {label: '' + error});
   }
+
+  render($root, graph);
+
+  const {height: h, width: w} = graph.graph();
+  const {innerHeight: H, innerWidth: W} = window;
+  const scale = 0.75 * Math.min(W / w, H / h);
+
+  $rect.call(
+    zoom.transform,
+    D3.zoomIdentity
+      .translate((W - w * scale) / 2, (H - h * scale) / 2)
+      .scale(scale)
+  );
 }
 
 function onEvent() {
