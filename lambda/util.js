@@ -2,7 +2,7 @@ import {App, Lam, Val, Var, fold, isApp, isLam, isVal, isVar} from './core';
 
 export const alpha = (M, N) => {
   const diff = compare(M, N);
-  return diff === 0 ? true : equal(M, lift(N, 0, diff));
+  return diff === 0 ? true : isFinite(diff) ? equal(M, lift(N, 0, diff)) : false;
 };
 
 export const beta = (M, N) => betaAt(M, N, 0);

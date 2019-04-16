@@ -81,8 +81,8 @@ const toKnown = fold(
   M => null,
   M => {
     const n = fromChurch(M);
-    if (!knownTermsNames.includes(`${n}`))
-      knownTermsAdd([`${n}`, `C<sub>${n}</sub>`], `(${toString(toChurch(n))})`);
+    if (isFinite(n) && !knownTermsNames.includes(`${n}`))
+      knownTermsAdd([`C<sub>${n}</sub>`], `(${toString(toChurch(n))})`);
 
     const knownTerm = knownTermsTerms.find(term => alpha(M, term));
     if (knownTerm)
