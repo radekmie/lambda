@@ -76,24 +76,38 @@ export const fromInput = ({string, useNames}) => {
   return graph;
 };
 
+const toKnown = fold(
+  M => null,
+  M => null,
+  M => {
+    const n = fromChurch(M);
+    if (!knownTermsNames.includes(`${n}`))
+      knownTermsAdd([`${n}`, `C<sub>${n}</sub>`], `(${toString(toChurch(n))})`);
+
+    const knownTerm = knownTermsTerms.find(term => alpha(M, term));
+    if (knownTerm)
+      return knownTermsTerm2Name.get(knownTerm);
+
+    return null;
+  },
+  M => null
+);
+
 const toLabel = fold(
   (M, Ns, useNames) => [toName(M[1]), false, false],
   (M, Ns, useNames) => [`<b>${M[1]}</b>`, false, false],
   (M, Ns, useNames) => {
     const [m, hasRedexM] = toLabel(M[2], Ns, useNames);
     if (!hasRedexM && useNames) {
-      const n = fromChurch(M);
-      if (!knownTermsNames.includes(`${n}`))
-        knownTermsAdd([`${n}`, `C<sub>${n}</sub>`], `(${toString(toChurch(n))})`);
-
-      const knownTerm = knownTermsTerms.find(term => alpha(M, term));
+      const knownTerm = toKnown(M);
       if (knownTerm)
-        return [knownTermsTerm2Name.get(knownTerm), false, true];
+        return [knownTerm, false, true];
     }
+
 
     let tail = M;
     let vars = '';
-    while (isLam(tail)) {
+    while (isLam(tail) && !toKnown(tail)) {
       vars += toName(tail[1]);
       tail = tail[2];
     }
