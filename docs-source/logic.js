@@ -104,10 +104,9 @@ const toLabel = fold(
         return [knownTerm, false, true];
     }
 
-
     let tail = M;
     let vars = '';
-    while (isLam(tail) && !toKnown(tail)) {
+    while (isLam(tail) && (!useNames || !toKnown(tail))) {
       vars += toName(tail[1]);
       tail = tail[2];
     }
