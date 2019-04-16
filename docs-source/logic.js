@@ -10,6 +10,7 @@ import {
   isVal,
   isVar,
   size,
+  toAST,
   toChurch,
   toName,
   toString
@@ -34,8 +35,8 @@ const knownTermsAdd = (names, text) => {
 };
 
 knownTermsAdd(['I'], '(λx.x)');
-knownTermsAdd(['K'], '(λx.λy.x)');
-knownTermsAdd(['S'], '(λx.λy.λz.xz(yz))');
+knownTermsAdd(['K'], '(λxy.x)');
+knownTermsAdd(['S'], '(λxyz.xz(yz))');
 knownTermsAdd(['Y'], '(λf.(λx.f(xx))(λx.f(xx)))');
 for (let n = 0; n < 10; ++n)
   knownTermsAdd([`${n}`, `C<sub>${n}</sub>`], `(${toString(toChurch(n))})`);
@@ -46,15 +47,15 @@ export const fromInput = ({string, useNames}) => {
   const M = fromString(input);
 
   for (const [termA, pairs] of betaGraph(M, Math.min(size(M) ** 2, 50))) {
-    const textA = toString(termA);
+    const textA = toAST(termA);
     graph.setNode(textA, {
       label: toLabel(termA, pairs.map(pair => pair[1]), useNames)[0],
       labelType: 'html'
     });
 
     for (const pair of pairs) {
-      const textB = toString(pair[0]);
-      const textC = toString(pair[1]);
+      const textB = toAST(pair[0]);
+      const textC = toAST(pair[1]);
 
       if (!graph.node(textB)) {
         graph.setNode(textB, {
@@ -90,7 +91,14 @@ const toLabel = fold(
         return [knownTermsTerm2Name.get(knownTerm), false, true];
     }
 
-    return [`λ${toName(M[1])}.${m}`, hasRedexM, false];
+    let tail = M;
+    let vars = '';
+    while (isLam(tail)) {
+      vars += toName(tail[1]);
+      tail = tail[2];
+    }
+
+    return [`λ${vars}.${toLabel(tail, Ns, useNames)[0]}`, hasRedexM, false];
   },
   (M, Ns, useNames) => {
     const [m, hasRedexM, isKnownM] = toLabel(M[1], Ns, useNames);

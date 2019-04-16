@@ -1,7 +1,10 @@
 import {App, Lam, Val, Var} from './core';
 
 export const fromString = string => {
-  const tokens = string.split('');
+  const tokens = string
+    .replace(/λ[a-z][a-z]+\./g, vars => `λ${vars.split('').slice(1, -1).join('.λ')}.`)
+    .split('');
+
   const parsed = parse(tokens, [], false);
   if (tokens.length)
     throw new Error('ParsingError');

@@ -140,7 +140,16 @@ export const toName = x => (x + 10).toString(36);
 export const toString = fold(
   M => toName(M[1]),
   M => M[1],
-  M => `λ${toName(M[1])}.${toString(M[2])}`,
+  M => {
+    let tail = M;
+    let vars = '';
+    while (isLam(tail)) {
+      vars += toName(tail[1]);
+      tail = tail[2];
+    }
+
+    return `λ${vars}.${toString(tail)}`;
+  },
   M => {
     const m = toString(M[1]);
     const n = toString(M[2]);
