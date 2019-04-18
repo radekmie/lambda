@@ -3,19 +3,19 @@ const $Lam = 1;
 const $Val = 2;
 const $Var = 3;
 
-export const App = (m, n) => [$App, m, n];
-export const Lam = (x, n) => [$Lam, x, n];
+export const App = (M, N) => [$App, M, N];
+export const Lam = (x, N) => [$Lam, x, N];
 export const Val = x => [$Val, x];
 export const Var = x => [$Var, x];
 
-export const isApp = term => term[0] === $App;
-export const isLam = term => term[0] === $Lam;
-export const isVal = term => term[0] === $Val;
-export const isVar = term => term[0] === $Var;
+export const isApp = M => M[0] === $App;
+export const isLam = M => M[0] === $Lam;
+export const isVal = M => M[0] === $Val;
+export const isVar = M => M[0] === $Var;
 
-export const fold = (Var, Val, Lam, App) => (term, ...args) => {
-  if (isApp(term)) return App(term, ...args);
-  if (isLam(term)) return Lam(term, ...args);
-  if (isVal(term)) return Val(term, ...args);
-  if (isVar(term)) return Var(term, ...args);
+export const match = (Var, Val, Lam, App) => (M, ...args) => {
+  if (isApp(M)) return App(M, ...args);
+  if (isLam(M)) return Lam(M, ...args);
+  if (isVal(M)) return Val(M, ...args);
+  if (isVar(M)) return Var(M, ...args);
 };

@@ -3,12 +3,12 @@ import {Graph} from 'graphlib';
 import {
   alpha,
   betaGraph,
-  fold,
   fromChurch,
   fromString,
   isLam,
   isVal,
   isVar,
+  match,
   size,
   toAST,
   toChurch,
@@ -76,7 +76,7 @@ export const fromInput = ({string, useNames}) => {
   return graph;
 };
 
-const toKnown = fold(
+const toKnown = match(
   M => null,
   M => null,
   M => {
@@ -93,7 +93,7 @@ const toKnown = fold(
   M => null
 );
 
-const toLabel = fold(
+const toLabel = match(
   (M, Ns, useNames) => [toName(M[1]), false, false],
   (M, Ns, useNames) => [`<b>${M[1]}</b>`, false, false],
   (M, Ns, useNames) => {

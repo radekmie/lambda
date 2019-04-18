@@ -1,4 +1,4 @@
-import {App, Lam, Val, Var, fold, isApp, isLam, isVal, isVar} from './core';
+import {App, Lam, Val, Var, isApp, isLam, isVal, isVar, match} from './core';
 
 export const alpha = (M, N) => {
   const diff = compare(M, N);
@@ -7,7 +7,7 @@ export const alpha = (M, N) => {
 
 export const beta = (M, N) => betaAt(M, N, 0);
 
-export const betaAt = fold(
+export const betaAt = match(
   (M, N, d) => M,
   (M, N, d) => M,
   (M, N, d) => Lam(M[1], betaAt(M[2], N, d + 1)),
@@ -42,14 +42,14 @@ export const betaNormal = (M, limit) => {
       return term;
 };
 
-export const betaRedexes = fold(
+export const betaRedexes = match(
   M => [],
   M => [],
   M => betaRedexes(M[2]),
   M => betaRedexes(M[2]).concat(betaRedexes(M[1]), isLam(M[1]) ? [M] : [])
 );
 
-export const compare = fold(
+export const compare = match(
   (M, N) => !isVar(N) ? (N[0] - M[0]) * Infinity : M[1] - N[1],
   (M, N) => !isVal(N) ? (N[0] - M[0]) * Infinity : M[1].localeCompare(N[1]),
   (M, N) => !isLam(N) ? (N[0] - M[0]) * Infinity : M[1] - N[1] || compare(M[2], N[2]),
@@ -60,14 +60,14 @@ export const copy = M => lift(M, 0, 0);
 
 export const equal = (M, N) => compare(M, N) === 0;
 
-export const free = fold(
+export const free = match(
   M => [M],
   M => [M],
   M => free(M[2]).filter(N => !isVar(N) || N[1] !== M[1]),
   M => free(M[1]).concat(free(M[2]))
 );
 
-export const fromChurch = fold(
+export const fromChurch = match(
   (M, f, x, n) => M[1] === x ? +n : NaN,
   (M, f, x, n) => NaN,
   (M, f, x, n) => f === undefined ? fromChurch(M[2], M[1]) : x === undefined ? fromChurch(M[2], f, M[1], 0) : NaN,
@@ -91,37 +91,37 @@ export const generate = function * (n, free = [], vars = []) {
         yield App(copy(M), N);
 };
 
-export const lift = fold(
+export const lift = match(
   (M, d, n) => Var(M[1] < d ? M[1] : M[1] + n),
   (M, d, n) => Val(M[1]),
   (M, d, n) => Lam(M[1] + n, lift(M[2], d, n)),
   (M, d, n) => App(lift(M[1], d, n), lift(M[2], d, n))
 );
 
-export const phi = fold(
+export const phi = match(
   M => M,
   M => M,
   M => Lam(M[1], phi(M[2])),
   M => isLam(M[1]) ? replace(phi(M[1][2]), M[1][1], phi(M[2])) : App(phi(M[1]), phi(M[2]))
 );
 
-export const replace = M => replaceAt(M, 0);
+export const replace = (M, x, N) => replaceAt(M, x, N, 0);
 
-export const replaceAt = fold(
+export const replaceAt = match(
   (M, x, N, d) => x === M[1] ? lift(N, x, d) : x < M[1] ? Var(M[1] - 1) : M,
   (M, x, N, d) => M,
   (M, x, N, d) => x === M[1] ? M : Lam(x < M[1] ? M[1] - 1 : M[1], replaceAt(M[2], x, N, d + 1)),
   (M, x, N, d) => App(replaceAt(M[1], x, N, d), replaceAt(M[2], x, N, d))
 );
 
-export const size = fold(
+export const size = match(
   M => 1,
   M => 1,
   M => 1 + size(M[2]),
-  M => size(M[1]) + size(M[2])
+  M => 1 + size(M[1]) + size(M[2])
 );
 
-export const toAST = fold(
+export const toAST = match(
   M => `Var(${M[1]})`,
   M => `Val(${M[1]})`,
   M => `Lam(${M[1]}, ${toAST(M[2])})`,
@@ -137,7 +137,7 @@ export const toChurch = n => {
 
 export const toName = x => (x + 10).toString(36);
 
-export const toString = fold(
+export const toString = match(
   M => toName(M[1]),
   M => M[1],
   M => {
