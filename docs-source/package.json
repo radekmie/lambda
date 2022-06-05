@@ -2,7 +2,7 @@
   "name": "lambda",
   "private": true,
   "scripts": {
-    "build": "parcel build index.html --detailed-report --no-autoinstall --no-content-hash --no-source-maps --out-dir ../docs --public-url https://radekmie.github.io/lambda/",
+    "build": "parcel build index.html --detailed-report --no-autoinstall --no-content-hash --no-source-maps --out-dir ../docs --public-url https://radekmie.dev/lambda/",
     "start": "parcel serve index.html --out-dir .cache/docs"
   },
   "dependencies": {
